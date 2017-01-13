@@ -1,22 +1,33 @@
 import java.util.ArrayList;
 
+/** uzol evolucneho stromu, predstavuje organizmus v danom case a mieste v evolucnom strome */
 class Node {
 	Double time;
 	Node parent;
 	Node left;
 	Node right;
 	String name;
-
-	//variables for PIVO
-	ArrayList<Chromosome> chromosomes;
 	int events;
 	int lineNumber;
 
+	//variables for PIVO
+	/** zoznam chromozomov*/
+	ArrayList<Chromosome> chromosomes;
+
 	//variables for DUP
+	/** zoznam atomov organizmu v danom case, nahradza funkciu premennej chromosomes */
 	ArrayList<Atom> atoms;
+
+	/** referencia na jedine dieta uzlu, pri udalosti roznej od speciacie */
 	Node onlyChild;
+
+	/** index, od ktoreho v zozname atomov source_species zacina zduplikovana/vymazana cast */
 	int startIndexSource;
+
+	/** index, kam sa ulozi zduplikovana cast v target_species */
 	int startIndexTarget;
+
+	/** kolko atomov sa zduplikovalo/vymazalo */
 	int howMany;
 
 	Node(String name, double time) {
@@ -41,7 +52,7 @@ class Node {
 	}
 
 	@Override public boolean equals(Object o) {
-		if(! (o instanceof Node)) return false; //a Person can't be equal to a non-person
+		if(! (o instanceof Node)) return false;
 
 		Node n = (Node) o;
 		return time.equals(n.time);

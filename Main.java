@@ -29,9 +29,7 @@ public class Main {
 		ArrayList<Atom> atoms = new ArrayList<>();
 		for(String atomString : line){
 			Atom atom = new Atom();
-			if(atomString.equals("-")){
-				atom.isDeleted = true;
-			} else {
+			if (!atomString.equals("-")) {
 				if (atomString.startsWith("-")) {
 					atom.strand = -1;
 					atomString = atomString.substring(1);
@@ -222,7 +220,7 @@ public class Main {
 			} catch (FileNotFoundException e) {
 				e.printStackTrace();
 			}
-			t.createTreeFromHistory(parseHistory(historyString));
+			t.createTreeFromDUPHistory(parseHistory(historyString));
 			t.generateOutputDUP();
 			try {
 				PrintWriter writer = new PrintWriter(args[1].split("\\.")[0] + "-output.history", "UTF-8");

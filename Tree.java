@@ -2,10 +2,17 @@ import java.util.ArrayList;
 import java.util.Objects;
 import java.util.TreeMap;
 
+/** Trieda predstavuje evolucny strom, obsahuje najma koren tohto stromu, rozne metody na spravovanie
+ *  a upravu stromu + metody na tvorbu vystupu podla tohto stromu */
 class Tree {
 
+	/** koren evolucneho stromu */
 	Node root;
+
+	/** premenna, ktora sa pouziva pri generovani vystupu */
 	private int currentLineNumber;
+
+	/** predstavuje zoznam riadkov vystupu v novom formate */
 	ArrayList<String> output;
 
 	Tree() {
@@ -34,6 +41,7 @@ class Tree {
 		return n2;
 	}
 
+	/** spocita dlzky hran stromu smerom z korena do listov, aby v kazdom Node bol cas jeho vzniku */
 	void sumTime(Node node, double time){
 		node.time+= time;
 		if(node.left != null || node.right != null) {
@@ -42,7 +50,7 @@ class Tree {
 		}
 	}
 
-	private String chromosomesOutput(Node node){
+	private String chromosomesOutputPIVO(Node node){
 		StringBuilder sb = new StringBuilder();
 		for (int i = 0; i < node.chromosomes.size(); i++) {
 			for(Integer gene: node.chromosomes.get(i).genes){
@@ -55,7 +63,7 @@ class Tree {
 		return sb.append("# ").toString();
 	}
 
-	private String positionsOutput(Node node){
+	private String positionsOutputPIVO(Node node){
 		String output = "";
 		ArrayList<Integer> theseGenes = new ArrayList<>();
 		ArrayList<Integer> parentGenes = new ArrayList<>();
@@ -76,7 +84,7 @@ class Tree {
 		if(node.events > 0){
 			String outputLine1 = node.name + " e" + currentLineNumber + " e" +
 				node.parent.lineNumber + " " + node.parent.time +
-				" sp " + chromosomesOutput(node.parent);
+				" sp " + chromosomesOutputPIVO(node.parent);
 			int n = node.getGeneQuantity();
 			for (int i = 0; i < n; i++) {
 				outputLine1 += i + " ";
@@ -85,14 +93,14 @@ class Tree {
 			currentLineNumber++;
 			String outputLine2 = node.name + " e" + currentLineNumber + " e" +
 				(currentLineNumber - 1) + " " + (node.time + node.parent.time) / 2 +
-				" other " + chromosomesOutput(node) + positionsOutput(node);
+				" other " + chromosomesOutputPIVO(node) + positionsOutputPIVO(node);
 			node.lineNumber = currentLineNumber;
 			currentLineNumber++;
 			output.add(outputLine2);
 		} else {
 			String outputLine = node.name + " e" + currentLineNumber + " e" +
 				node.parent.lineNumber + " " + node.parent.time +
-				" sp " + chromosomesOutput(node);
+				" sp " + chromosomesOutputPIVO(node);
 			int n = node.getGeneQuantity();
 			for (int i = 0; i < n; i++) {
 				outputLine += i + " ";
@@ -107,7 +115,7 @@ class Tree {
 		} else {
 			String outputLineLeaf = node.name + " e" + currentLineNumber + " e" +
 				(currentLineNumber - 1) + " " + node.time +
-				" leaf " + chromosomesOutput(node);
+				" leaf " + chromosomesOutputPIVO(node);
 			int n = node.getGeneQuantity();
 			for (int i = 0; i < n; i++) {
 				outputLineLeaf += i + " ";
@@ -119,19 +127,21 @@ class Tree {
 
 	void generateOutputPIVO(){
 		//korenovy riadok
-		String line = root.name +" e1 root -0.05 root " + chromosomesOutput(root);
+		String line = root.name +" e1 root -0.05 root " + chromosomesOutputPIVO(root);
 		int n = root.getGeneQuantity();
 		for (int i = 0; i < n; i++) {
 			line += "-1 ";
 		}
 		output.add(line);
+
 		//ostatne riadky
 		root.lineNumber = 1;
 		nodeOutputPIVO(root.left);
 		nodeOutputPIVO(root.right);
 	}
 
-	void createTreeFromHistory(ArrayList<History> history) {
+	/** upravi strom (prida uzly do stromu) podla historie, pripravi strom na generovanie vystupu */
+	void createTreeFromDUPHistory(ArrayList<History> history) {
 		Node currentNode = null;
 		TreeMap<String, String> nameMap = new TreeMap<>();
 		for(History h: history){
@@ -198,27 +208,8 @@ class Tree {
 		}
 	}
 
-	void generateOutputDUP(){
-		//korenovy riadok
-		String line = root.name +" e1 root -0.05 root ";
-		for(Atom atom: root.atoms){
-			line += atom.type + " ";
-		}
-		line += "$ # ";
-		for (int i = 0; i < root.atoms.size(); i++) {
-			line += "-1 ";
-		}
-		output.add(line);
-
-		//ostatne riadky
-		root.lineNumber = 1;
-		nodeOutputDUP(root);
-
-	}
 	private void nodeOutputDUP(Node node){
 		if(node.left!= null){
-//			nodeOutput(node.left);
-//			nodeOutput(node.right);
 			String line = node.left.name + " e" + currentLineNumber + " e" +
 				(currentLineNumber - 1) + " " + node.time + " sp ";
 			for(Atom atom: node.atoms){
@@ -318,5 +309,23 @@ class Tree {
 			output.add(line);
 			currentLineNumber++;
 		}
+	}
+
+	void generateOutputDUP(){
+		//korenovy riadok
+		String line = root.name +" e1 root -0.05 root ";
+		for(Atom atom: root.atoms){
+			line += atom.type + " ";
+		}
+		line += "$ # ";
+		for (int i = 0; i < root.atoms.size(); i++) {
+			line += "-1 ";
+		}
+		output.add(line);
+
+		//ostatne riadky
+		root.lineNumber = 1;
+		nodeOutputDUP(root);
+
 	}
 }
