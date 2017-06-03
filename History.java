@@ -1,6 +1,6 @@
 import java.util.ArrayList;
 
-/** Trieda predstavujuca sparsovany riadok duplikacnej historie */
+/** Trieda predstavujuca sparsovany riadok vstupnej duplikacnej historie */
 class History {
 	String source_species;
 	String target_species;

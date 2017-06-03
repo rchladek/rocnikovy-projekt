@@ -1,5 +1,4 @@
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
@@ -7,7 +6,7 @@ import java.util.Objects;
 import java.util.Scanner;
 
 
-public class Main {
+public class EHConverter {
 	private static ArrayList<History> parseHistory(ArrayList<String[]> historyString){
 		ArrayList<History> historyArrayList = new ArrayList<>();
 		for (int i = historyString.size() - 1; i >= 0; i--) {
@@ -20,6 +19,7 @@ public class Main {
 			h.event_count = Integer.parseInt(historyString.get(i)[5]);
 			h.source_atoms = parseAtoms(historyString.get(i)[6].split(";"));
 			h.target_atoms = parseAtoms(historyString.get(i)[7].split(";"));
+
 			historyArrayList.add(h);
 		}
 		return historyArrayList;
@@ -29,7 +29,10 @@ public class Main {
 		ArrayList<Atom> atoms = new ArrayList<>();
 		for(String atomString : line){
 			Atom atom = new Atom();
-			if (!atomString.equals("-")) {
+			if (atomString.equals("-")) {
+				atom.isDeleted = true;
+				atom.id = -1;
+			} else {
 				if (atomString.startsWith("-")) {
 					atom.strand = -1;
 					atomString = atomString.substring(1);
@@ -71,8 +74,11 @@ public class Main {
 			else name += right.name;
 			t.root.name = name;
 			return t;
+		} else {
+			Tree t = new Tree();
+			t.root.name = str;
+			return t;
 		}
-		return null;
 	}
 
 	private static Node parseNode(String str){
@@ -90,20 +96,27 @@ public class Main {
 			int koniecIndex = i;
 			i++;
 			String ancestorName = "";
-			while(str.charAt(i) <= 'z' && str.charAt(i) >='a'){
-				ancestorName = ancestorName.concat(str.charAt(i) + "");
-				i++;
-			}
-			assert str.charAt(i) == ':';
-			i++;
 			String time = "";
-			while((str.charAt(i) <= '9' && str.charAt(i) >='0') || str.charAt(i) == '.'){
-				time = time.concat(str.charAt(i) + "");
+			if(koniecIndex != str.length() - 1) {
+				while (str.charAt(i) <= 'z' && str.charAt(i) >= 'a') {
+					ancestorName = ancestorName.concat(str.charAt(i) + "");
+					i++;
+				}
+				assert str.charAt(i) == ':';
 				i++;
-				if(i == str.length()) break;
+				while ((str.charAt(i) <= '9' && str.charAt(i) >= '0') || str.charAt(i) == '.') {
+					time = time.concat(str.charAt(i) + "");
+					i++;
+					if (i == str.length()) break;
+				}
 			}
 			Node left = parseNode(str.substring(1,ciarkaIndex));
 			Node right = parseNode(str.substring(ciarkaIndex+1,koniecIndex));
+
+			if(koniecIndex == str.length() - 1){
+				time = Double.toString(Math.min(left.time, right.time)*2/3);
+			}
+
 			String name;
 			if(!Objects.equals(ancestorName, "")) name = ancestorName;
 			else {
@@ -121,116 +134,130 @@ public class Main {
 			node.left = left;
 			node.right = right;
 			return node;
-		}
-		else {
+		} else {
 			int colonIndex = str.lastIndexOf(':');
-			String name = str.substring(0,colonIndex);
-			double time = Double.parseDouble(str.substring(colonIndex +1));
+			String name;
+			double time;
+			if(colonIndex == -1){
+				int i = 0;
+				while (str.charAt(i) <= 'z' && str.charAt(i) >= 'a') i++;
+				name = str;
+				time = 0.35;
+			} else {
+				name = str.substring(0, colonIndex);
+				time = Double.parseDouble(str.substring(colonIndex + 1));
+			}
 			node = new Node(name, time);
 			return node;
 		}
 	}
 
-	public static void main(String[] args) {
+	public static void main(String[] args) throws IOException {
 		if(args[0].equals("pivo")){
 			if(args.length !=3) throw new IllegalArgumentException("Wrong number of arguments");
 			File tree_file = new File(args[1]);
 			String treeString = "";
-			try {
-				Scanner s = new Scanner(tree_file);
-				while (s.hasNext()) {
-					treeString = s.nextLine();
-				}
-			} catch (FileNotFoundException e) {
-				e.printStackTrace();
+
+			Scanner s = new Scanner(tree_file);
+			while (s.hasNext()) {
+				treeString = s.nextLine();
 			}
+			s.close();
+
 			Tree t = parseTree(treeString);
 			File reconstruction_file = new File(args[2]);
-			try {
-				Scanner s2 = new Scanner(reconstruction_file);
-				while (s2.hasNext()) {
-					String[] line = s2.nextLine().split("\\s+");
-					Node node = t.findNodeByName(line[0], t.root);
+
+			Scanner s2 = new Scanner(reconstruction_file);
+
+			while (s2.hasNextLine()) {
+				String[] line = s2.nextLine().split("\\s+");
+				Node node;
+				int zaciatok = 0;
+				if(line[0].startsWith("#")){
+					line = s2.nextLine().split("\\s+");
+					node = t.findNodeByName(line[0].substring(1), t.root);
+					node.events = 1;
+					line = s2.nextLine().split("\\s+");
+				} else {
+					node = t.findNodeByName(line[0], t.root);
 					node.events = Integer.parseInt(line[1]);
-					int n = line.length;
-					ArrayList<Chromosome> chromosomes = new ArrayList<>();
-					ArrayList<Integer> genes = new ArrayList<>();
-					for (int i = 2; i < n; i++) {
-						if (line[i].equals("@")) {
-							chromosomes.add(new Chromosome(genes, true));
-							genes = new ArrayList<>();
-						} else if (line[i].equals("$")) {
-							chromosomes.add(new Chromosome(genes, false));
-							genes = new ArrayList<>();
-						} else genes.add(Integer.parseInt(line[i]));
-					}
-					node.chromosomes = chromosomes;
+					zaciatok = 2;
 				}
-			} catch (FileNotFoundException e) {
-				e.printStackTrace();
+				int n = line.length;
+				ArrayList<Chromosome> chromosomes = new ArrayList<>();
+				ArrayList<Integer> genes = new ArrayList<>();
+				for (int i = zaciatok; i < n; i++) {
+					if (line[i].equals("@")) {
+						chromosomes.add(new Chromosome(genes, true));
+						genes = new ArrayList<>();
+					} else if (line[i].equals("$")) {
+						chromosomes.add(new Chromosome(genes, false));
+						genes = new ArrayList<>();
+					} else genes.add(Integer.parseInt(line[i]));
+				}
+				node.chromosomes = chromosomes;
+
 			}
-			t.sumTime(t.root, 0);
+			s2.close();
+
+			double time_offset = 0.05;
+			t.time_offset = time_offset;
+			t.sumTime(t.root, time_offset);
 			t.generateOutputPIVO();
-			try {
-				PrintWriter writer = new PrintWriter(args[1].split("_")[0] + "_output.history", "UTF-8");
-				for(String line: t.output) {
-					writer.println(line);
-				}
-				writer.close();
-			} catch (IOException e) {
-				e.printStackTrace();
+
+			PrintWriter writer = new PrintWriter(args[1].split("_")[0] + "_output.history", "UTF-8");
+			for(String line: t.output) {
+				writer.println(line);
 			}
-		}
-		else if (args[0].equals("dup")){
+			writer.close();
+		} else if (args[0].equals("dup")){
 			if(args.length !=4) throw new IllegalArgumentException("Wrong number of arguments");
 			File tree_file = new File(args[1]);
 			String treeString = "";
-			try {
-				Scanner s = new Scanner(tree_file);
-				while (s.hasNext()) {
-					treeString = s.nextLine();
-				}
-			} catch (FileNotFoundException e) {
-				e.printStackTrace();
+
+			Scanner s = new Scanner(tree_file);
+			while (s.hasNext()) {
+				treeString = s.nextLine();
 			}
+			s.close();
+
 			Tree t = parseTree(treeString);
 			t.sumTime(t.root, 0);
 			File atoms_file = new File(args[2]);
-			try {
-				Scanner s = new Scanner(atoms_file);
-				while (s.hasNext()) {
-					String[] line = s.nextLine().split("\\s+");
-					Node node = t.findNodeByName(line[0], t.root);
-					Atom a = new Atom();
-					a.id = Integer.parseInt(line[1]);
-					a.type = Integer.parseInt(line[2]);
-					a.strand = Integer.parseInt(line[3]);
-					node.atoms.add(a);
-				}
-			} catch (FileNotFoundException e) {
-				e.printStackTrace();
+
+			Scanner s2 = new Scanner(atoms_file);
+			while (s2.hasNext()) {
+				String[] line = s2.nextLine().split("\\s+");
+				Node node = t.findNodeByName(line[0], t.root);
+				Atom a = new Atom();
+				a.id = Integer.parseInt(line[1]);
+
+				a.type = Integer.parseInt(line[2]);
+				a.strand = Integer.parseInt(line[3]);
+				node.atoms.add(a);
 			}
+			s2.close();
+
 			File history_file = new File(args[3]);
 			ArrayList<String[]> historyString = new ArrayList<>();
-			try {
-				Scanner s = new Scanner(history_file);
-				while (s.hasNext()) {
-					historyString.add(s.nextLine().split("\\s+"));
-				}
-			} catch (FileNotFoundException e) {
-				e.printStackTrace();
+			Scanner s3 = new Scanner(history_file);
+			while (s3.hasNext()) {
+				String[] line = s3.nextLine().split("\\s+");
+				if(!line[0].equals("===")) historyString.add(line);
 			}
+			s3.close();
+
 			t.createTreeFromDUPHistory(parseHistory(historyString));
+			t.time_offset = 0.05;
+			t.alterTime(t.root, t.time_offset);
 			t.generateOutputDUP();
-			try {
-				PrintWriter writer = new PrintWriter(args[1].split("\\.")[0] + "-output.history", "UTF-8");
-				for(String line: t.output) {
-					writer.println(line);
-				}
-				writer.close();
-			} catch (IOException e) {
-				e.printStackTrace();
+
+			PrintWriter writer = new PrintWriter(args[1].split("\\.")[0] + "-output.history", "UTF-8");
+			for(String line: t.output) {
+				writer.println(line);
 			}
-		} else throw new IllegalArgumentException("Wrong first argument");
+			writer.close();
+
+			} else throw new IllegalArgumentException("Wrong first argument");
 	}
 }

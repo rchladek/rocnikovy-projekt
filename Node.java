@@ -9,6 +9,7 @@ class Node {
 	String name;
 	int events;
 	int lineNumber;
+	String event_type;
 
 	//variables for PIVO
 	/** zoznam chromozomov*/
@@ -17,6 +18,7 @@ class Node {
 	//variables for DUP
 	/** zoznam atomov organizmu v danom case, nahradza funkciu premennej chromosomes */
 	ArrayList<Atom> atoms;
+	ArrayList<Integer> atomsPos;
 
 	/** referencia na jedine dieta uzlu, pri udalosti roznej od speciacie */
 	Node onlyChild;
@@ -30,6 +32,22 @@ class Node {
 	/** kolko atomov sa zduplikovalo/vymazalo */
 	int howMany;
 
+	ArrayList<Integer> deletionPos;
+
+	Node(String name) {
+		time = (double) -1;
+		parent = null;
+		left = null;
+		right = null;
+		this.name = name;
+		chromosomes = new ArrayList<>();
+		events = 0;
+		lineNumber = -1;
+		atoms = new ArrayList<>();
+		onlyChild = null;
+		atomsPos = new ArrayList<>();
+	}
+
 	Node(String name, double time) {
 		this.time = time;
 		parent = null;
@@ -41,6 +59,8 @@ class Node {
 		lineNumber = -1;
 		atoms = new ArrayList<>();
 		onlyChild = null;
+		atomsPos = new ArrayList<>();
+		deletionPos = new ArrayList<>();
 	}
 
 	int getGeneQuantity(){

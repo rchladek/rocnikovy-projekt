@@ -2,8 +2,10 @@ import java.util.ArrayList;
 import java.util.Objects;
 import java.util.TreeMap;
 
-/** Trieda predstavuje evolucny strom, obsahuje najma koren tohto stromu, rozne metody na spravovanie
- *  a upravu stromu + metody na tvorbu vystupu podla tohto stromu */
+/**
+ * Trieda predstavuje evolucny strom, obsahuje najma koren tohto stromu, rozne metody na spravovanie
+ * a upravu stromu + metody na tvorbu vystupu podla tohto stromu
+ */
 class Tree {
 
 	/** koren evolucneho stromu */
@@ -15,63 +17,89 @@ class Tree {
 	/** predstavuje zoznam riadkov vystupu v novom formate */
 	ArrayList<String> output;
 
+	/** o kolko posunieme cas v celom strome aby nezacinala prva speciacia v case 0 */
+	double time_offset = 0;
+
 	Tree() {
 		root = new Node("Root", 0);
+		root.parent = new Node("Helping-root", -1);
+		root.parent.onlyChild = root;
 		currentLineNumber = 2;
 		output = new ArrayList<>();
 	}
 
-	Node findNodeByName(String name, Node node){
-		if(Objects.equals(node.name, name)) return node;
+	Node findNodeByName(String name, Node node) {
+		if (Objects.equals(node.name, name)) return node;
 		Node n1 = null;
 		Node n2 = null;
-		if(node.left != null) n1 = findNodeByName(name, node.left);
-		if(node.right != null) n2 = findNodeByName(name, node.right);
-		if(n1 != null) return n1;
-		return n2;
+		if (node.onlyChild == null) {
+			if (node.left != null) n1 = findNodeByName(name, node.left);
+			if (node.right != null) n2 = findNodeByName(name, node.right);
+			if (n1 != null) return n1;
+			return n2;
+		} else {
+			return findNodeByName(name, node.onlyChild);
+		}
 	}
 
 	private Node findNodeByTime(Double time, Node node) {
-		if(node.time.equals(time)) return node;
+		if (node.time.equals(time)) return node;
+
 		Node n1 = null;
 		Node n2 = null;
-		if(node.left != null) n1 = findNodeByTime(time, node.left);
-		if(node.right != null) n2 = findNodeByTime(time, node.right);
-		if(n1 != null) return n1;
-		return n2;
+		if (node.onlyChild == null) {
+			if (node.left != null) n1 = findNodeByTime(time, node.left);
+			if (node.right != null) n2 = findNodeByTime(time, node.right);
+			if (n1 != null) return n1;
+			return n2;
+		} else {
+			return findNodeByTime(time, node.onlyChild);
+		}
 	}
 
 	/** spocita dlzky hran stromu smerom z korena do listov, aby v kazdom Node bol cas jeho vzniku */
-	void sumTime(Node node, double time){
-		node.time+= time;
-		if(node.left != null || node.right != null) {
+	void sumTime(Node node, double time) {
+		node.time += time;
+		if (node.left != null || node.right != null) {
 			sumTime(node.left, node.time);
 			sumTime(node.right, node.time);
 		}
 	}
+	/** priradi cas vrcholom podla nastaveneho time_offset */
+	void alterTime(Node node, double time) {
+		node.time = time;
+		if (node.onlyChild != null) {
+			alterTime(node.onlyChild, time + time_offset);
+		} else if (node.left != null || node.right != null) {
+			alterTime(node.left, time + time_offset);
+			alterTime(node.right, time + time_offset);
+		}
+	}
 
-	private String chromosomesOutputPIVO(Node node){
+	private String chromosomesOutputPIVO(Node node) {
 		StringBuilder sb = new StringBuilder();
 		for (int i = 0; i < node.chromosomes.size(); i++) {
-			for(Integer gene: node.chromosomes.get(i).genes){
+			for (Integer gene : node.chromosomes.get(i).genes) {
 				sb.append(gene).append(" ");
 			}
-			if(node.chromosomes.get(i).isCircular)
+			if (node.chromosomes.get(i).isCircular) {
 				sb.append("@ ");
-			else sb.append("$ ");
+			} else {
+				sb.append("$ ");
+			}
 		}
 		return sb.append("# ").toString();
 	}
 
-	private String positionsOutputPIVO(Node node){
+	private String positionsOutputPIVO(Node node) {
 		String output = "";
 		ArrayList<Integer> theseGenes = new ArrayList<>();
 		ArrayList<Integer> parentGenes = new ArrayList<>();
-		for(Chromosome ch: node.chromosomes) theseGenes.addAll(ch.genes);
-		for(Chromosome ch: node.parent.chromosomes) parentGenes.addAll(ch.genes);
-		for(Integer gene: theseGenes){
+		for (Chromosome ch : node.chromosomes) theseGenes.addAll(ch.genes);
+		for (Chromosome ch : node.parent.chromosomes) parentGenes.addAll(ch.genes);
+		for (Integer gene : theseGenes) {
 			for (int i = 0; i < parentGenes.size(); i++) {
-				if(Math.abs(parentGenes.get(i)) == Math.abs(gene)){
+				if (Math.abs(parentGenes.get(i)) == Math.abs(gene)) {
 					output += i + " ";
 					break;
 				}
@@ -80,8 +108,8 @@ class Tree {
 		return output;
 	}
 
-	private void nodeOutputPIVO(Node node){
-		if(node.events > 0){
+	private void nodeOutputPIVO(Node node) {
+		if (node.events > 0) {
 			String outputLine1 = node.name + " e" + currentLineNumber + " e" +
 				node.parent.lineNumber + " " + node.parent.time +
 				" sp " + chromosomesOutputPIVO(node.parent);
@@ -109,201 +137,364 @@ class Tree {
 			currentLineNumber++;
 			output.add(outputLine);
 		}
-		if(node.left!= null || node.right!= null){
+		if (node.left != null || node.right != null) {
 			nodeOutputPIVO(node.left);
 			nodeOutputPIVO(node.right);
-		} else {
-			String outputLineLeaf = node.name + " e" + currentLineNumber + " e" +
-				(currentLineNumber - 1) + " " + node.time +
-				" leaf " + chromosomesOutputPIVO(node);
-			int n = node.getGeneQuantity();
-			for (int i = 0; i < n; i++) {
-				outputLineLeaf += i + " ";
-			}
-			output.add(outputLineLeaf);
-			currentLineNumber++;
+			// ODSTRANENE LEAFY
+//		} else {
+//			String outputLineLeaf = node.name + " e" + currentLineNumber + " e" +
+//				(currentLineNumber - 1) + " " + node.time +
+//				" leaf " + chromosomesOutputPIVO(node);
+//			//int n = node.getGeneQuantity();
+//			for (int i = 0; i < n; i++) {
+//				outputLineLeaf += i + " ";
+//			}
+//			output.add(outputLineLeaf);
+//			currentLineNumber++;
 		}
 	}
 
-	void generateOutputPIVO(){
+	void generateOutputPIVO() {
 		//korenovy riadok
-		String line = root.name +" e1 root -0.05 root " + chromosomesOutputPIVO(root);
+		String line = root.name + " e0 root 0 root " + chromosomesOutputPIVO(root);
 		int n = root.getGeneQuantity();
 		for (int i = 0; i < n; i++) {
 			line += "-1 ";
 		}
 		output.add(line);
 
+		line = root.name + " e1 e0 " + time_offset / 2 + " other " + chromosomesOutputPIVO(root);
+		n = root.getGeneQuantity();
+		for (int i = 0; i < n; i++) {
+			line += i + " ";
+		}
+		output.add(line);
+
 		//ostatne riadky
 		root.lineNumber = 1;
-		nodeOutputPIVO(root.left);
-		nodeOutputPIVO(root.right);
+		if (root.left != null || root.right != null) {
+			nodeOutputPIVO(root.left);
+			nodeOutputPIVO(root.right);
+		}
 	}
 
 	/** upravi strom (prida uzly do stromu) podla historie, pripravi strom na generovanie vystupu */
 	void createTreeFromDUPHistory(ArrayList<History> history) {
 		Node currentNode = null;
 		TreeMap<String, String> nameMap = new TreeMap<>();
-		for(History h: history){
-			if(h.event_type.equals("d")){
+		Node lastLeftChild = null;
+		Node lastRightChild = null;
+		for (History h : history) {
+			if (h.event_type.equals("d")) {
 				Node node;
-				if(currentNode!= null && currentNode.name.equals(h.target_species)) node = currentNode;
-				else {
-					if(nameMap.containsKey(h.target_species))
-						node = findNodeByName(nameMap.get(h.target_species), root);
-					else node = findNodeByName(h.target_species, root);
+				if (currentNode != null && currentNode.name.equals(h.target_species)) {
+					node = currentNode;
+				} else {
+					if (!nameMap.containsKey(h.target_species)) {
+						nameMap.put(h.target_species, h.target_species);
+					}
+					node = findNodeByName(nameMap.get(h.target_species), root);
 				}
-				Node parent;
-				if(nameMap.containsKey(h.target_species))
-					parent = new Node(nameMap.get(h.target_species), h.time);
-				else parent = new Node(h.target_species, h.time);
+				Node parent = new Node(nameMap.get(h.target_species));
 				ArrayList<Atom> newAtoms = new ArrayList<>();
 				newAtoms.addAll(node.atoms);
+				node.event_type = "dup";
+				node.time = h.time;
 				newAtoms.removeAll(h.target_atoms);
+				int startIndexNewAtoms = newAtoms.indexOf(h.source_atoms.get(0));
 				parent.howMany = h.source_atoms.size();
-				parent.startIndexSource = newAtoms.indexOf(h.source_atoms.get(0));
+				parent.startIndexSource = node.atoms.indexOf(h.source_atoms.get(0));
 				parent.startIndexTarget = node.atoms.indexOf(h.target_atoms.get(0));
-				parent.atoms = newAtoms;
-				parent.onlyChild = node;
-				if(node.parent.left.equals(node)) node.parent.left = parent;
-				else node.parent.right = parent;
-				parent.parent = node.parent;
-				node.parent = parent;
-				currentNode = parent;
-			}
-			if(h.event_type.equals("s")){
-				Node node = findNodeByTime(h.time, root);
-				node.atoms = h.source_atoms;
-				nameMap.put(node.left.name, node.name);
-				currentNode = node;
-			}
-			if(h.event_type.equals("x")){
-				Node node;
-				if(currentNode!= null && currentNode.name.equals(h.target_species)) node = currentNode;
-				else {
-					if(nameMap.containsKey(h.target_species))
-						node = findNodeByName(nameMap.get(h.target_species), root);
-					else node = findNodeByName(h.target_species, root);
-				}
-				Node parent;
-				if(nameMap.containsKey(h.target_species))
-					parent = new Node(nameMap.get(h.target_species), h.time);
-				else parent = new Node(h.target_species, h.time);
-				ArrayList<Atom> newAtoms = new ArrayList<>();
-				newAtoms.addAll(node.atoms);
-				int j = newAtoms.indexOf(h.source_atoms.get(0));
-				for(int k = 1; k < h.source_atoms.size() - 1; k++) {
-					newAtoms.add(j + k, h.source_atoms.get(k));
-				}
-				parent.howMany = h.source_atoms.size();
-				parent.startIndexSource = j;
-				parent.atoms = newAtoms;
-				parent.onlyChild = node;
-				if(node.parent.left.equals(node)) node.parent.left = parent;
-				else node.parent.right = parent;
-				parent.parent = node.parent;
-				node.parent = parent;
-				currentNode = parent;
-			}
-		}
-	}
 
-	private void nodeOutputDUP(Node node){
-		if(node.left!= null){
-			String line = node.left.name + " e" + currentLineNumber + " e" +
-				(currentLineNumber - 1) + " " + node.time + " sp ";
-			for(Atom atom: node.atoms){
-				if(atom.strand == - 1) line += "-";
-				line += atom.type + " ";
-			}
-			line += "$ # ";
-			for (int i = 0; i < node.atoms.size(); i++) {
-				line += i + " ";
-			}
-			node.lineNumber = currentLineNumber;
-			output.add(line);
-			currentLineNumber++;
-			nodeOutputDUP(node.left);
+				if (parent.startIndexSource < parent.startIndexTarget) {
+					int k = 0;
+					while (k < parent.startIndexSource) {
+						node.atomsPos.add(k);
+						k++;
+					}
 
-			line = node.right.name + " e" + currentLineNumber + " e" +
-				(node.lineNumber - 1) + " " + node.time + " sp ";
-			for(Atom atom: node.atoms){
-				if(atom.strand == - 1) line += "-";
-				line += atom.type + " ";
-			}
-			line += "$ # ";
-			for (int i = 0; i < node.atoms.size(); i++) {
-				line += i + " ";
-			}
-			node.lineNumber = currentLineNumber;
-			currentLineNumber++;
-			output.add(line);
-			nodeOutputDUP(node.right);
-		} else if(node.onlyChild!= null) {
-			String line = node.name + " e" + currentLineNumber + " e" +
-				node.parent.lineNumber + " " + node.time;
-			if(node.onlyChild.atoms.size() > node.atoms.size()){
-				line += " dup ";
-				for(Atom atom: node.onlyChild.atoms){
-					if(atom.strand == - 1) line += "-";
-					line += atom.type + " ";
-				}
-				line += "$ # ";
-				int i = 0;
-				while(i < node.startIndexTarget){
-					line += i + " ";
-					i++;
-				}
+					int howManyDeleted = 0;
 
-				if(node.onlyChild.atoms.get(i).type == node.atoms.get(node.startIndexSource).type){
-					for (int j = 0; j < node.howMany; j++) {
-						line += (node.startIndexSource + j) + " ";
+					for (int i = 0; i < h.source_atoms.size(); i++) {
+						if (h.source_atoms.get(i).isDeleted) {
+							Atom leftAnchor = h.source_atoms.get(i - 1);
+							int j = i;
+							ArrayList<Atom> deletedAtoms = new ArrayList<>();
+							while (h.source_atoms.get(j).isDeleted) {
+								int atomIndex;
+								if (h.strand == 1) {
+									atomIndex = j;
+								} else {
+									atomIndex = h.source_atoms.size() - j - 1;
+								}
+								deletedAtoms.add(h.target_atoms.get(atomIndex));
+								howManyDeleted++;
+								j++;
+							}
+							int leftIndex = newAtoms.indexOf(leftAnchor);
+							newAtoms.addAll(leftIndex + 1, deletedAtoms);
+							i = j;
+						}
+						node.atomsPos.add(k + i);
+					}
+
+					k += h.source_atoms.size();
+					while (k < (parent.startIndexTarget + howManyDeleted)) {
+						node.atomsPos.add(k);
+						k++;
+					}
+
+					for (int i = 0; i < h.target_atoms.size(); i++) {
+						if (h.target_atoms.get(i).isDeleted) {
+							int j = i;
+							while (h.target_atoms.get(j).isDeleted) {
+								j++;
+							}
+							i = j;
+						}
+						if (h.strand == 1) {
+							node.atomsPos.add(parent.startIndexSource + i);
+						} else {
+							node.atomsPos.add(parent.startIndexSource + (h.target_atoms.size() - i - 1));
+						}
+					}
+
+					while (k < newAtoms.size()) {
+						node.atomsPos.add(k);
+						k++;
 					}
 				} else {
-					for (int j = node.howMany - 1; j >= 0 ; j--) {
-						line+= (node.startIndexSource + j) + " ";
+					int k = 0;
+					while (k < parent.startIndexTarget) {
+						node.atomsPos.add(k);
+						k++;
+					}
+					int howManyDeleted = 0;
+					for (int i = 0; i < h.target_atoms.size(); i++) {
+						if (h.target_atoms.get(i).isDeleted) {
+							int j = i;
+							while (h.target_atoms.get(j).isDeleted) {
+								howManyDeleted++;
+								j++;
+							}
+							i = j;
+						}
+						if (h.strand == 1) {
+							node.atomsPos.add(startIndexNewAtoms + i);
+						} else {
+							node.atomsPos.add(startIndexNewAtoms + (h.target_atoms.size() - i - 1));
+						}
+					}
+
+					while (k < (startIndexNewAtoms + howManyDeleted)) {
+						node.atomsPos.add(k);
+						k++;
+					}
+
+					for (int i = 0; i < h.source_atoms.size(); i++) {
+						if (h.source_atoms.get(i).isDeleted) {
+							Atom leftAnchor = h.source_atoms.get(i - 1);
+							int j = i;
+							ArrayList<Atom> deletedAtoms = new ArrayList<>();
+							while (h.source_atoms.get(j).isDeleted) {
+								int atomIndex;
+								if (h.strand == 1) {
+									atomIndex = j;
+								} else {
+									atomIndex = h.source_atoms.size() - j - 1;
+								}
+								deletedAtoms.add(h.target_atoms.get(atomIndex));
+								j++;
+							}
+							int leftIndex = newAtoms.indexOf(leftAnchor);
+							newAtoms.addAll(leftIndex + 1, deletedAtoms);
+							i = j;
+						}
+						node.atomsPos.add(k + i);
+					}
+
+					k += h.source_atoms.size();
+
+					while (k < newAtoms.size()) {
+						node.atomsPos.add(k);
+						k++;
 					}
 				}
-				for(; i < node.atoms.size(); i++){
-					line += i + " ";
+				parent.atoms = newAtoms;
+				parent.onlyChild = node;
+				if (node.parent.onlyChild != null) {
+					node.parent.onlyChild = parent;
+					root = parent;
+				} else if (node.parent.left.equals(node)) {
+					node.parent.left = parent;
+					lastLeftChild = parent;
+				} else {
+					node.parent.right = parent;
+					lastRightChild = parent;
 				}
-				node.lineNumber = currentLineNumber;
-				currentLineNumber++;
-				output.add(line);
-				nodeOutputDUP(node.onlyChild);
-			} else {
-				line += " del ";
-				for(Atom atom: node.onlyChild.atoms){
-					if(atom.strand == - 1) line += "-";
-					line += atom.type + " ";
-				}
-				line += "$ # ";
-				int i = 0;
-				while(i < node.startIndexSource + 1){
-					line += i + " ";
-					i++;
-				}
-				i += node.howMany - 2;
-				while(i < node.atoms.size()){
-					line += i + " ";
-					i++;
-				}
-				node.lineNumber = currentLineNumber;
-				currentLineNumber++;
-				output.add(line);
-				nodeOutputDUP(node.onlyChild);
+				parent.parent = node.parent;
+				node.parent = parent;
+				currentNode = parent;
 			}
-		} else {
-			String line = node.name + " e" + currentLineNumber + " e" +
-				node.parent.lineNumber + " " + node.time + " leaf ";
+			if (h.event_type.equals("s")) {
+				String nameString = lastLeftChild.name + "-" + lastRightChild.name;
+				Node ancestor = findNodeByName(nameString, root);
+				if(ancestor == null){
+					ancestor = findNodeByTime(h.time, root);
+				}
+				ancestor.left.event_type = "sp";
+				ancestor.left.time = h.time;
+				ancestor.right.event_type = "sp";
+				ancestor.right.time = h.time;
 
-			for(Atom atom: node.atoms){
-				if(atom.strand == - 1) line += "-";
+				ArrayList<Atom> newAtoms = new ArrayList<>();
+				for (int i = 0; i < h.source_atoms.size(); i++) {
+					if (h.source_atoms.get(i).isDeleted) {
+						int j = i;
+						ArrayList<Atom> deletedAtoms = new ArrayList<>();
+						while (h.source_atoms.get(j).isDeleted) {
+							int atomIndex;
+							if (h.strand == 1) {
+								atomIndex = j;
+							} else {
+								atomIndex = h.source_atoms.size() - j - 1;
+							}
+							deletedAtoms.add(h.target_atoms.get(atomIndex));
+							if (j == h.source_atoms.size() - 1) break;
+							j++;
+						}
+						newAtoms.addAll(deletedAtoms);
+						i = j;
+						if (!h.source_atoms.get(i).isDeleted) {
+							ancestor.left.atomsPos.add(i);
+							newAtoms.add(h.source_atoms.get(i));
+						}
+					} else {
+						newAtoms.add(h.source_atoms.get(i));
+						ancestor.left.atomsPos.add(i);
+					}
+				}
+
+				for (int i = 0; i < h.target_atoms.size(); i++) {
+					if (h.target_atoms.get(i).isDeleted) {
+						int j = i;
+						while (h.target_atoms.get(j).isDeleted) {
+							j++;
+						}
+						i = j;
+					}
+					ancestor.right.atomsPos.add(i);
+				}
+				ancestor.atoms = newAtoms;
+				nameMap.put(ancestor.left.name, ancestor.name);
+				currentNode = ancestor;
+			}
+			if (h.event_type.equals("x")) {
+				Node node;
+				if (currentNode != null && currentNode.name.equals(h.target_species)) {
+					node = currentNode;
+				} else {
+					if (!nameMap.containsKey(h.target_species)) {
+						nameMap.put(h.target_species, h.target_species);
+					}
+					node = findNodeByName(nameMap.get(h.target_species), root);
+				}
+				Node parent = new Node(nameMap.get(h.target_species));
+				ArrayList<Atom> newAtoms = new ArrayList<>();
+				newAtoms.addAll(node.atoms);
+				node.event_type = "del";
+				node.time = h.time;
+
+				parent.howMany = h.source_atoms.size();
+				parent.startIndexSource = node.atoms.indexOf(h.source_atoms.get(0));
+
+				int k = 0;
+				while(k < parent.startIndexSource){
+					node.atomsPos.add(k);
+					k++;
+				}
+
+
+				for (int i = 0; i < h.target_atoms.size(); i++) {
+					if (h.target_atoms.get(i).isDeleted) {
+						Atom leftAnchor = h.source_atoms.get(i - 1);
+						int j = i;
+						ArrayList<Atom> deletedAtoms = new ArrayList<>();
+						while (h.target_atoms.get(j).isDeleted) {
+							int atomIndex;
+							if (h.strand == 1) {
+								atomIndex = j;
+							} else {
+								atomIndex = h.source_atoms.size() - j - 1;
+							}
+							deletedAtoms.add(h.source_atoms.get(atomIndex));
+							if (j == h.source_atoms.size() - 1) break;
+							j++;
+						}
+						newAtoms.addAll(newAtoms.indexOf(leftAnchor) + 1, deletedAtoms);
+						i = j;
+						if (!h.target_atoms.get(i).isDeleted) {
+							node.atomsPos.add(k + i);
+						}
+					} else {
+						node.atomsPos.add(k + i);
+					}
+				}
+
+				k+=h.source_atoms.size();
+				while (k < newAtoms.size()){
+					node.atomsPos.add(k);
+					k++;
+				}
+
+				parent.atoms = newAtoms;
+				parent.onlyChild = node;
+				if (node.parent.onlyChild != null) {
+					node.parent.onlyChild = parent;
+					root = parent;
+				} else if (node.parent.left.equals(node)) {
+					node.parent.left = parent;
+					lastLeftChild = parent;
+				} else {
+					node.parent.right = parent;
+					lastRightChild = parent;
+				}
+				parent.parent = node.parent;
+				node.parent = parent;
+				currentNode = parent;
+			}
+		}
+	}
+
+	private void nodeOutputDUP(Node node) {
+		String line = node.name + " e" + currentLineNumber + " e" +
+			node.parent.lineNumber + " " + node.time + " " + node.event_type + " ";
+		for (Atom atom : node.atoms) {
+			if (atom.strand == -1) line += "-";
+			line += atom.type + " ";
+		}
+		line += "$ # ";
+		for (int i = 0; i < node.atomsPos.size(); i++) {
+			line += node.atomsPos.get(i) + " ";
+		}
+		node.lineNumber = currentLineNumber;
+		output.add(line);
+		currentLineNumber++;
+		if (node.onlyChild != null) {
+			nodeOutputDUP(node.onlyChild);
+		} else if (node.left != null) {
+			nodeOutputDUP(node.left);
+			nodeOutputDUP(node.right);
+		} else {
+			//ak chceme leafy na konci
+			line = node.name + " e" + currentLineNumber + " e" +
+				(currentLineNumber - 1) + " " + (node.time + time_offset) + " leaf ";
+			for (Atom atom : node.atoms) {
+				if (atom.strand == -1) line += "-";
 				line += atom.type + " ";
 			}
 			line += "$ # ";
-
-			for (int i = 0; i < node.atoms.size(); i++) {
+			for (int i = 0; i < node.atomsPos.size(); i++) {
 				line += i + " ";
 			}
 			output.add(line);
@@ -311,10 +502,11 @@ class Tree {
 		}
 	}
 
-	void generateOutputDUP(){
+	void generateOutputDUP() {
 		//korenovy riadok
-		String line = root.name +" e1 root -0.05 root ";
-		for(Atom atom: root.atoms){
+		String line = root.name + " e0 root 0 root ";
+		for (Atom atom : root.atoms) {
+			if (atom.strand == -1) line += "-";
 			line += atom.type + " ";
 		}
 		line += "$ # ";
@@ -324,8 +516,13 @@ class Tree {
 		output.add(line);
 
 		//ostatne riadky
-		root.lineNumber = 1;
-		nodeOutputDUP(root);
-
+		currentLineNumber = 1;
+		root.lineNumber = 0;
+		if (root.onlyChild != null) {
+			nodeOutputDUP(root.onlyChild);
+		} else if (root.left != null || root.right != null) {
+			nodeOutputDUP(root.left);
+			nodeOutputDUP(root.right);
+		}
 	}
 }
