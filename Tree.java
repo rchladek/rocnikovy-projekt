@@ -65,15 +65,39 @@ class Tree {
 			sumTime(node.right, node.time);
 		}
 	}
-	/** priradi cas vrcholom podla nastaveneho time_offset */
-	void alterTime(Node node, double time) {
+
+	/** priradi casy pre vrcholy podla casov v speciaciach a listoch */
+	void correctTime(Node node, double time) {
 		node.time = time;
-		if (node.onlyChild != null) {
-			alterTime(node.onlyChild, time + time_offset);
-		} else if (node.left != null || node.right != null) {
-			alterTime(node.left, time + time_offset);
-			alterTime(node.right, time + time_offset);
+
+		int howMany = 0;
+		Node nextSpeciation = node;
+
+		while (nextSpeciation.onlyChild != null){
+			howMany++;
+			nextSpeciation = nextSpeciation.onlyChild;
 		}
+		howMany--;
+		Double nextTime = nextSpeciation.time;
+
+		Node helpNode;
+		if(nextSpeciation.left == null){
+			helpNode = nextSpeciation.parent;
+		} else {
+			helpNode = nextSpeciation;
+		}
+
+		int i = howMany;
+		while (helpNode!= node){
+			helpNode.time = node.time + i*(nextTime - node.time)/(howMany + 1);
+			helpNode = helpNode.parent;
+			i--;
+		}
+
+		if(nextSpeciation.left == null) return;
+		correctTime(nextSpeciation.left, nextTime);
+		correctTime(nextSpeciation.right, nextTime);
+
 	}
 
 	private String chromosomesOutputPIVO(Node node) {
@@ -179,7 +203,7 @@ class Tree {
 	}
 
 	/** upravi strom (prida uzly do stromu) podla historie, pripravi strom na generovanie vystupu */
-	void createTreeFromDUPHistory(ArrayList<History> history) {
+	void createTreeFromDUPHistory(ArrayList<History> history, boolean isReal) {
 		Node currentNode = null;
 		TreeMap<String, String> nameMap = new TreeMap<>();
 		Node lastLeftChild = null;
@@ -187,7 +211,7 @@ class Tree {
 		for (History h : history) {
 			if (h.event_type.equals("d")) {
 				Node node;
-				if (currentNode != null && currentNode.name.equals(h.target_species)) {
+				if (currentNode != null && currentNode.name.equals(nameMap.get(h.target_species))) {
 					node = currentNode;
 				} else {
 					if (!nameMap.containsKey(h.target_species)) {
@@ -199,7 +223,9 @@ class Tree {
 				ArrayList<Atom> newAtoms = new ArrayList<>();
 				newAtoms.addAll(node.atoms);
 				node.event_type = "dup";
-				node.time = h.time;
+				if(isReal){
+					if(node.time <= 0) node.time = h.time;
+				} else node.time = h.time + time_offset;
 				newAtoms.removeAll(h.target_atoms);
 				int startIndexNewAtoms = newAtoms.indexOf(h.source_atoms.get(0));
 				parent.howMany = h.source_atoms.size();
@@ -340,12 +366,8 @@ class Tree {
 				String nameString = lastLeftChild.name + "-" + lastRightChild.name;
 				Node ancestor = findNodeByName(nameString, root);
 				if(ancestor == null){
-					ancestor = findNodeByTime(h.time, root);
+					ancestor = findNodeByTime(h.time + time_offset, root);
 				}
-				ancestor.left.event_type = "sp";
-				ancestor.left.time = h.time;
-				ancestor.right.event_type = "sp";
-				ancestor.right.time = h.time;
 
 				ArrayList<Atom> newAtoms = new ArrayList<>();
 				for (int i = 0; i < h.source_atoms.size(); i++) {
@@ -385,6 +407,33 @@ class Tree {
 					}
 					ancestor.right.atomsPos.add(i);
 				}
+
+				if(h.event_count > 1){
+					Node speciationNodeLeft = new Node(ancestor.left.name);
+					Node speciationNodeRight = new Node(ancestor.right.name);
+					ancestor.left.event_type = "del";
+					ancestor.right.event_type = "del";
+					speciationNodeLeft.atoms.addAll(newAtoms);
+					speciationNodeRight.atoms.addAll(newAtoms);
+					for (int i = 0; i < newAtoms.size(); i++) {
+						speciationNodeLeft.atomsPos.add(i);
+						speciationNodeRight.atomsPos.add(i);
+					}
+					speciationNodeLeft.onlyChild = ancestor.left;
+					ancestor.left.parent = speciationNodeLeft;
+					ancestor.left = speciationNodeLeft;
+					speciationNodeLeft.parent = ancestor;
+
+					speciationNodeRight.onlyChild = ancestor.right;
+					ancestor.right.parent = speciationNodeRight;
+					ancestor.right = speciationNodeRight;
+					speciationNodeRight.parent = ancestor;
+				}
+
+				ancestor.left.event_type = "sp";
+				ancestor.right.event_type = "sp";
+				ancestor.left.time = (h.time + time_offset);
+				ancestor.right.time = (h.time + time_offset);
 				ancestor.atoms = newAtoms;
 				nameMap.put(ancestor.left.name, ancestor.name);
 				currentNode = ancestor;
@@ -403,8 +452,9 @@ class Tree {
 				ArrayList<Atom> newAtoms = new ArrayList<>();
 				newAtoms.addAll(node.atoms);
 				node.event_type = "del";
-				node.time = h.time;
-
+				if(isReal){
+					if(node.time <= 0) node.time = h.time;
+				} else node.time = h.time + time_offset;
 				parent.howMany = h.source_atoms.size();
 				parent.startIndexSource = node.atoms.indexOf(h.source_atoms.get(0));
 
@@ -487,8 +537,9 @@ class Tree {
 			nodeOutputDUP(node.right);
 		} else {
 			//ak chceme leafy na konci
+			//leafy v konecnom dosledku koncia o time_offset + (leaf.time - leaf.parent.time)
 			line = node.name + " e" + currentLineNumber + " e" +
-				(currentLineNumber - 1) + " " + (node.time + time_offset) + " leaf ";
+				(currentLineNumber - 1) + " " + (2*node.time - node.parent.time) + " leaf ";
 			for (Atom atom : node.atoms) {
 				if (atom.strand == -1) line += "-";
 				line += atom.type + " ";
@@ -515,9 +566,21 @@ class Tree {
 		}
 		output.add(line);
 
+		//udalost, v ktorej sa nic neudialo
+		line = root.name + " e1 e0 " + time_offset / 2 + " other ";
+		for (Atom atom : root.atoms) {
+			if (atom.strand == -1) line += "-";
+			line += atom.type + " ";
+		}
+		line += "$ # ";
+		for (int i = 0; i < root.atoms.size(); i++) {
+			line += i + " ";
+		}
+		output.add(line);
+
 		//ostatne riadky
-		currentLineNumber = 1;
-		root.lineNumber = 0;
+		currentLineNumber = 2;
+		root.lineNumber = 1;
 		if (root.onlyChild != null) {
 			nodeOutputDUP(root.onlyChild);
 		} else if (root.left != null || root.right != null) {

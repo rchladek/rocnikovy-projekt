@@ -153,6 +153,10 @@ public class EHConverter {
 	}
 
 	public static void main(String[] args) throws IOException {
+		//hodnota o kolko je posunuty cas, na zaciatku sa v polke tohto casu odohra udalost, pocas ktorej sa nic neudialo
+		//prva udalost zacina potom v tomto case
+		double time_offset = 0.01;
+
 		if(args[0].equals("pivo")){
 			if(args.length !=3) throw new IllegalArgumentException("Wrong number of arguments");
 			File tree_file = new File(args[1]);
@@ -200,7 +204,6 @@ public class EHConverter {
 			}
 			s2.close();
 
-			double time_offset = 0.05;
 			t.time_offset = time_offset;
 			t.sumTime(t.root, time_offset);
 			t.generateOutputPIVO();
@@ -210,8 +213,12 @@ public class EHConverter {
 				writer.println(line);
 			}
 			writer.close();
-		} else if (args[0].equals("dup")){
-			if(args.length !=4) throw new IllegalArgumentException("Wrong number of arguments");
+		} else if (args[0].startsWith("dup")){
+			boolean isReal = args[0].equals("dup-real");
+			boolean isGenerated = args[0].equals("dup-gen");
+			if(!isReal && !isGenerated) throw new IllegalArgumentException("Wrong first argument");
+			if(args.length !=4 && isGenerated) throw new IllegalArgumentException("Wrong number of arguments");
+			if(args.length !=5 && isReal) throw new IllegalArgumentException("Wrong number of arguments");
 			File tree_file = new File(args[1]);
 			String treeString = "";
 
@@ -222,7 +229,11 @@ public class EHConverter {
 			s.close();
 
 			Tree t = parseTree(treeString);
-			t.sumTime(t.root, 0);
+			if(isReal){
+				t.root.time = Double.parseDouble(args[4]);
+			}
+			t.time_offset = time_offset;
+			t.sumTime(t.root, time_offset);
 			File atoms_file = new File(args[2]);
 
 			Scanner s2 = new Scanner(atoms_file);
@@ -247,9 +258,10 @@ public class EHConverter {
 			}
 			s3.close();
 
-			t.createTreeFromDUPHistory(parseHistory(historyString));
-			t.time_offset = 0.05;
-			t.alterTime(t.root, t.time_offset);
+			t.createTreeFromDUPHistory(parseHistory(historyString), isReal);
+			if(isReal) {
+				t.correctTime(t.root, time_offset);
+			}
 			t.generateOutputDUP();
 
 			PrintWriter writer = new PrintWriter(args[1].split("\\.")[0] + "-output.history", "UTF-8");

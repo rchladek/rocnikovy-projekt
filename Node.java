@@ -75,6 +75,6 @@ class Node {
 		if(! (o instanceof Node)) return false;
 
 		Node n = (Node) o;
-		return time.equals(n.time);
+		return time.equals(n.time) && atoms.size() == n.atoms.size();
 	}
 }
